@@ -6,11 +6,11 @@ const morgan = require('morgan');
 const helmet = require('helmet');
 const compression = require('compression');
 const cors = require('cors');
-
 const pool = require('./src/db/pool');
 const security = require('./src/middlewares/security');
 
 // Routes
+const managerRoutes = require('./src/routes/manager.routes');
 const customerRoutes = require('./src/routes/customer.routes');
 const authRoutes = require('./src/routes/auth.routes');
 const productRoutes = require('./src/routes/product.routes');
@@ -65,7 +65,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/inventory', inventoryRoutes);
-
+app.use('/api/manager', managerRoutes);
 // Error handling
 app.use(notFound);
 app.use(errorHandler);
