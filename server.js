@@ -42,6 +42,7 @@ app.get('/', (req, res) => {
 app.get('/api/health', async (req, res) => {
   try {
     const result = await pool.query('SELECT NOW() AS now');
+
     res.json({
       success: true,
       message: 'Database connected',
@@ -49,6 +50,7 @@ app.get('/api/health', async (req, res) => {
     });
   } catch (error) {
     console.error('DATABASE HEALTH ERROR:', error);
+
     res.status(500).json({
       success: false,
       message: 'Database connection failed',
