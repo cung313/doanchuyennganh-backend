@@ -1,5 +1,4 @@
-const service = require('../services/priority1.service');
-
+const priority1Service = require('../services/priority1.service');
 async function getWarehouseDashboard(req, res, next) {
   try {
     const data = await service.getWarehouseDashboard();
