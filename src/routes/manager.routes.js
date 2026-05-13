@@ -18,4 +18,21 @@ router.post('/products', managerController.createProduct);
 router.put('/products/:id', managerController.updateProduct);
 router.patch('/products/:id/status', managerController.updateProductStatus);
 
+// NHÀ CUNG CẤP
+router.get('/suppliers', managerController.getSuppliers);
+router.post('/suppliers', managerController.createSupplier);
+router.put('/suppliers/:id', managerController.updateSupplier);
+router.delete('/suppliers/:id', managerController.deleteSupplier);
+
+// CÔNG NỢ
+router.get('/debts', managerController.getDebts);
+
+// BÁO CÁO
+router.get('/reports/summary', managerController.getReportsSummary);
+
+// NGƯỜI DÙNG
+router.get('/users', managerController.getUsers);
+router.post('/users', managerController.createUser);
+router.patch('/users/:id/status', managerController.updateUserStatus);
+
 module.exports = router;
