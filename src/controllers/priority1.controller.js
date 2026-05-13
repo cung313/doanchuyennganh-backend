@@ -252,7 +252,94 @@ async function cancelOrder(req, res, next) {
     next(error);
   }
 }
+async function approveStockIssue(req, res, next) {
+  try {
+    const { ma_nd_duyet } = req.body;
 
+    if (!ma_nd_duyet) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu mã người duyệt',
+      });
+    }
+
+    const data = await priority1Service.approveStockIssue({
+      ma_px: req.params.id,
+      ma_nd_duyet,
+    });
+
+    res.json({
+      success: true,
+      message: 'Đã duyệt phiếu xuất kho',
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}async function rejectStockIssue(req, res, next) {
+  try {
+    const { ma_nd_duyet, ly_do_tu_choi } = req.body;
+
+    if (!ma_nd_duyet) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu mã người duyệt',
+      });
+    }
+
+    if (!ly_do_tu_choi || !ly_do_tu_choi.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng nhập lý do từ chối',
+      });
+    }
+
+    const data = await priority1Service.rejectStockIssue({
+      ma_px: req.params.id,
+      ma_nd_duyet,
+      ly_do_tu_choi: ly_do_tu_choi.trim(),
+    });
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy phiếu xuất đang chờ duyệt',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Đã từ chối phiếu xuất kho',
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}async function updateOrderStatus(req, res, next) {
+  try {
+    const { trang_thai } = req.body;
+
+    if (!trang_thai) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu trạng thái đơn hàng',
+      });
+    }
+
+    const data = await priority1Service.updateOrderStatus({
+      ma_dh: req.params.id,
+      trang_thai,
+    });
+
+    res.json({
+      success: true,
+      message: 'Cập nhật trạng thái đơn hàng thành công',
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
 module.exports = {
   getWarehouseDashboard,
   getStocks,
@@ -266,6 +353,9 @@ module.exports = {
   createStockIssue,
   getStockIssues,
   getStockIssueDetail,
+  approveStockIssue,
+  rejectStockIssue,
 
   cancelOrder,
+  updateOrderStatus,
 };

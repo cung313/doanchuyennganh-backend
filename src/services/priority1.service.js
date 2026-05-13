@@ -464,6 +464,11 @@ async function rejectStockCount({ ma_bb, ma_nd_duyet, ly_do }) {
 // ======================================================
 // PHIẾU XUẤT KHO / HAO HỤT
 // ======================================================
+// ======================================================
+// PHIẾU XUẤT KHO / HAO HỤT - TẠO PHIẾU CHỜ DUYỆT
+// Nhân viên kho chỉ lập phiếu.
+// Chưa trừ tồn kho ở bước này.
+// ======================================================
 async function createStockIssue({
   ma_nd_lap,
   loai,
@@ -480,13 +485,21 @@ async function createStockIssue({
       throw new Error('Phiếu xuất phải có ít nhất một sản phẩm');
     }
 
+    if (!ma_nd_lap) {
+      throw new Error('Thiếu người lập phiếu xuất');
+    }
+
+    if (!ly_do || !ly_do.trim()) {
+      throw new Error('Vui lòng nhập lý do xuất kho');
+    }
+
     let tongGiaTri = 0;
 
     for (const item of items) {
       const product = await getProductStock(client, item.ma_sp);
 
       if (!product) {
-        throw new Error('Không tìm thấy sản phẩm');
+        throw new Error('Không tìm thấy sản phẩm trong phiếu xuất');
       }
 
       const soLuongTon = Number(product.so_luong_ton || 0);
@@ -498,7 +511,7 @@ async function createStockIssue({
 
       if (soLuongTon < soLuongXuat) {
         throw new Error(
-          `Sản phẩm ${product.ten_sp} không đủ tồn kho để xuất`
+          `Sản phẩm ${product.ten_sp} không đủ tồn kho để đề xuất xuất`
         );
       }
 
@@ -516,17 +529,18 @@ async function createStockIssue({
         ma_nd_lap,
         ly_do,
         ghi_chu,
-        tong_gia_tri
+        tong_gia_tri,
+        trang_thai
       )
-      VALUES ($1, $2, $3, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, $5, $6, 'CHO_DUYET')
       RETURNING *
       `,
       [
         soPhieu,
         loai || 'XUAT_HAO_HUT',
         ma_nd_lap,
-        ly_do || null,
-        ghi_chu || null,
+        ly_do.trim(),
+        ghi_chu?.trim() || null,
         tongGiaTri,
       ]
     );
@@ -558,39 +572,6 @@ async function createStockIssue({
           thanhTien,
         ]
       );
-
-      await client.query(
-        `
-        UPDATE ton_kho
-        SET
-          so_luong_ton = so_luong_ton - $1,
-          cap_nhat_luc = NOW()
-        WHERE ma_sp = $2
-        `,
-        [soLuongXuat, item.ma_sp]
-      );
-
-      await client.query(
-        `
-        INSERT INTO lich_su_kho (
-          loai,
-          ma_sp,
-          so_luong_thay_doi,
-          tham_chieu_loai,
-          tham_chieu_ma,
-          ghi_chu
-        )
-        VALUES ($1, $2, $3, $4, $5, $6)
-        `,
-        [
-          loai || 'XUAT_HAO_HUT',
-          item.ma_sp,
-          -soLuongXuat,
-          'PHIEU_XUAT',
-          phieuXuat.ma_px,
-          ly_do || 'Xuất kho / hao hụt',
-        ]
-      );
     }
 
     await client.query('COMMIT');
@@ -607,6 +588,9 @@ async function createStockIssue({
 // ======================================================
 // PHIẾU XUẤT - DANH SÁCH
 // ======================================================
+// ======================================================
+// PHIẾU XUẤT - DANH SÁCH
+// ======================================================
 async function getStockIssues(keyword = '') {
   const q = `%${keyword.trim()}%`;
 
@@ -618,25 +602,37 @@ async function getStockIssues(keyword = '') {
       px.ngay_xuat,
       px.loai::text AS loai,
       px.ly_do,
+      px.ghi_chu,
       px.tong_gia_tri,
-      COALESCE(nd.ho_ten, 'Không xác định') AS nguoi_lap,
+      px.trang_thai,
+      px.ngay_duyet,
+      px.ly_do_tu_choi,
+      COALESCE(nd_lap.ho_ten, 'Không xác định') AS nguoi_lap,
+      COALESCE(nd_duyet.ho_ten, '') AS nguoi_duyet,
       COUNT(ct.ma_ct)::int AS so_dong
     FROM phieu_xuat px
-    LEFT JOIN nguoi_dung nd ON nd.ma_nd = px.ma_nd_lap
+    LEFT JOIN nguoi_dung nd_lap ON nd_lap.ma_nd = px.ma_nd_lap
+    LEFT JOIN nguoi_dung nd_duyet ON nd_duyet.ma_nd = px.ma_nd_duyet
     LEFT JOIN ct_phieu_xuat ct ON ct.ma_px = px.ma_px
     WHERE
       $1 = '%%'
       OR px.so_phieu ILIKE $1
       OR px.loai::text ILIKE $1
-      OR COALESCE(nd.ho_ten, '') ILIKE $1
+      OR px.trang_thai ILIKE $1
+      OR COALESCE(nd_lap.ho_ten, '') ILIKE $1
     GROUP BY
       px.ma_px,
       px.so_phieu,
       px.ngay_xuat,
       px.loai,
       px.ly_do,
+      px.ghi_chu,
       px.tong_gia_tri,
-      nd.ho_ten
+      px.trang_thai,
+      px.ngay_duyet,
+      px.ly_do_tu_choi,
+      nd_lap.ho_ten,
+      nd_duyet.ho_ten
     ORDER BY px.ngay_xuat DESC
     `,
     [q]
@@ -654,9 +650,11 @@ async function getStockIssueDetail(ma_px) {
     SELECT
       px.*,
       px.loai::text AS loai,
-      COALESCE(nd.ho_ten, 'Không xác định') AS nguoi_lap
+      COALESCE(nd_lap.ho_ten, 'Không xác định') AS nguoi_lap,
+      COALESCE(nd_duyet.ho_ten, '') AS nguoi_duyet
     FROM phieu_xuat px
-    LEFT JOIN nguoi_dung nd ON nd.ma_nd = px.ma_nd_lap
+    LEFT JOIN nguoi_dung nd_lap ON nd_lap.ma_nd = px.ma_nd_lap
+    LEFT JOIN nguoi_dung nd_duyet ON nd_duyet.ma_nd = px.ma_nd_duyet
     WHERE px.ma_px = $1
     `,
     [ma_px]
@@ -690,6 +688,147 @@ async function getStockIssueDetail(ma_px) {
   };
 }
 
+// ======================================================
+// PHIẾU XUẤT - DUYỆT
+// Khi duyệt mới trừ tồn kho và ghi lịch sử kho.
+// ======================================================
+async function approveStockIssue({ ma_px, ma_nd_duyet }) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const issueResult = await client.query(
+      `
+      SELECT *
+      FROM phieu_xuat
+      WHERE ma_px = $1
+      FOR UPDATE
+      `,
+      [ma_px]
+    );
+
+    const phieu = issueResult.rows[0];
+
+    if (!phieu) {
+      throw new Error('Không tìm thấy phiếu xuất kho');
+    }
+
+    if (phieu.trang_thai !== 'CHO_DUYET') {
+      throw new Error('Phiếu xuất này đã được xử lý');
+    }
+
+    const itemsResult = await client.query(
+      `
+      SELECT
+        ct.ma_sp,
+        ct.so_luong,
+        ct.gia_xuat,
+        sp.ten_sp
+      FROM ct_phieu_xuat ct
+      JOIN san_pham sp ON sp.ma_sp = ct.ma_sp
+      WHERE ct.ma_px = $1
+      `,
+      [ma_px]
+    );
+
+    if (itemsResult.rows.length === 0) {
+      throw new Error('Phiếu xuất không có chi tiết hàng hóa');
+    }
+
+    for (const item of itemsResult.rows) {
+      const updateStock = await client.query(
+        `
+        UPDATE ton_kho
+        SET
+          so_luong_ton = so_luong_ton - $1,
+          cap_nhat_luc = NOW()
+        WHERE ma_sp = $2
+          AND so_luong_ton >= $1
+        RETURNING ma_sp, so_luong_ton
+        `,
+        [item.so_luong, item.ma_sp]
+      );
+
+      if (updateStock.rowCount === 0) {
+        throw new Error(
+          `Tồn kho sản phẩm ${item.ten_sp} không đủ để duyệt phiếu xuất`
+        );
+      }
+
+      await client.query(
+        `
+        INSERT INTO lich_su_kho (
+          loai,
+          ma_sp,
+          so_luong_thay_doi,
+          tham_chieu_loai,
+          tham_chieu_ma,
+          ghi_chu
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          phieu.loai,
+          item.ma_sp,
+          -Number(item.so_luong),
+          'PHIEU_XUAT',
+          phieu.ma_px,
+          phieu.ly_do || 'Duyệt phiếu xuất kho',
+        ]
+      );
+    }
+
+    const approvedResult = await client.query(
+      `
+      UPDATE phieu_xuat
+      SET
+        trang_thai = 'DA_DUYET',
+        ma_nd_duyet = $1,
+        ngay_duyet = NOW(),
+        ly_do_tu_choi = NULL
+      WHERE ma_px = $2
+      RETURNING *
+      `,
+      [ma_nd_duyet, ma_px]
+    );
+
+    await client.query('COMMIT');
+
+    return approvedResult.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// ======================================================
+// PHIẾU XUẤT - TỪ CHỐI
+// ======================================================
+async function rejectStockIssue({
+  ma_px,
+  ma_nd_duyet,
+  ly_do_tu_choi,
+}) {
+  const result = await pool.query(
+    `
+    UPDATE phieu_xuat
+    SET
+      trang_thai = 'TU_CHOI',
+      ma_nd_duyet = $1,
+      ngay_duyet = NOW(),
+      ly_do_tu_choi = $2
+    WHERE ma_px = $3
+      AND trang_thai = 'CHO_DUYET'
+    RETURNING *
+    `,
+    [ma_nd_duyet, ly_do_tu_choi || 'Không phê duyệt', ma_px]
+  );
+
+  return result.rows[0] || null;
+}
 // ======================================================
 // HỦY ĐƠN + HOÀN TỒN KHO
 // ======================================================
@@ -791,7 +930,57 @@ async function cancelOrder({ ma_dh, ma_nd_huy, ly_do }) {
     client.release();
   }
 }
+// ======================================================
+// ĐƠN HÀNG - CẬP NHẬT TRẠNG THÁI
+// Quy trình an toàn:
+// NHAP -> DA_THANH_TOAN
+// Không cho đổi HUY sang trạng thái khác.
+// ======================================================
+async function updateOrderStatus({ ma_dh, trang_thai }) {
+  const allowedStatuses = ['NHAP', 'DA_THANH_TOAN'];
 
+  if (!allowedStatuses.includes(trang_thai)) {
+    throw new Error('Trạng thái đơn hàng không hợp lệ');
+  }
+
+  const currentResult = await pool.query(
+    `
+    SELECT ma_dh, trang_thai
+    FROM don_hang
+    WHERE ma_dh = $1
+    `,
+    [ma_dh]
+  );
+
+  const current = currentResult.rows[0];
+
+  if (!current) {
+    throw new Error('Không tìm thấy đơn hàng');
+  }
+
+  if (current.trang_thai === 'HUY') {
+    throw new Error('Đơn hàng đã hủy, không thể đổi trạng thái');
+  }
+
+  if (
+    current.trang_thai === 'DA_THANH_TOAN' &&
+    trang_thai === 'NHAP'
+  ) {
+    throw new Error('Không thể chuyển đơn đã thanh toán về nháp');
+  }
+
+  const result = await pool.query(
+    `
+    UPDATE don_hang
+    SET trang_thai = $1
+    WHERE ma_dh = $2
+    RETURNING *
+    `,
+    [trang_thai, ma_dh]
+  );
+
+  return result.rows[0];
+}
 module.exports = {
   getWarehouseDashboard,
   getStockItems,
@@ -805,6 +994,9 @@ module.exports = {
   createStockIssue,
   getStockIssues,
   getStockIssueDetail,
+  approveStockIssue,
+  rejectStockIssue,
 
   cancelOrder,
+  updateOrderStatus,
 };
