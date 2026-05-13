@@ -10,6 +10,7 @@ const pool = require('./src/db/pool');
 const security = require('./src/middlewares/security');
 
 // Routes
+const warehouseRoutes = require('./src/routes/warehouse.routes');
 const managerOrderCustomerRoutes = require('./src/routes/manager_order_customer.routes');
 const managerRoutes = require('./src/routes/manager.routes');
 const customerRoutes = require('./src/routes/customer.routes');
@@ -61,6 +62,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Routes
+app.use('/api/warehouse', warehouseRoutes);
 app.use('/api/manager', managerOrderCustomerRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/auth', authRoutes);
