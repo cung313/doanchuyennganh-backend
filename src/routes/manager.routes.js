@@ -34,5 +34,6 @@ router.get('/reports/summary', managerController.getReportsSummary);
 router.get('/users', managerController.getUsers);
 router.post('/users', managerController.createUser);
 router.patch('/users/:id/status', managerController.updateUserStatus);
+router.patch('/users/:id/role', managerController.updateUserRole);
 
 module.exports = router;

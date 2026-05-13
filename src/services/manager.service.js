@@ -549,7 +549,7 @@ async function getUsers(keyword = '') {
       ho_ten,
       ten_dang_nhap,
       email,
-      vai_tro,
+      vai_tro::text AS vai_tro,
       trang_thai,
       tao_luc
     FROM nguoi_dung
@@ -557,9 +557,9 @@ async function getUsers(keyword = '') {
       $1 = '%%'
       OR ho_ten ILIKE $1
       OR ten_dang_nhap ILIKE $1
-      OR email ILIKE $1
+      OR COALESCE(email, '') ILIKE $1
       OR vai_tro::text ILIKE $1
-    ORDER BY tao_luc DESC NULLS LAST, ho_ten ASC
+    ORDER BY tao_luc DESC
     `,
     [q]
   );
@@ -602,7 +602,7 @@ async function createUser(payload) {
   return result.rows[0];
 }
 
-async function updateUserStatus(ma_nd, status) {
+async function updateUserStatus(userId, status) {
   const result = await pool.query(
     `
     UPDATE nguoi_dung
@@ -613,15 +613,33 @@ async function updateUserStatus(ma_nd, status) {
       ho_ten,
       ten_dang_nhap,
       email,
-      vai_tro,
+      vai_tro::text AS vai_tro,
       trang_thai
     `,
-    [status, ma_nd]
+    [status, userId]
   );
 
   return result.rows[0] || null;
 }
+async function updateUserRole(userId, newRole) {
+  const result = await pool.query(
+    `
+    UPDATE nguoi_dung
+    SET vai_tro = $1
+    WHERE ma_nd = $2
+    RETURNING
+      ma_nd,
+      ho_ten,
+      ten_dang_nhap,
+      email,
+      vai_tro::text AS vai_tro,
+      trang_thai
+    `,
+    [newRole, userId]
+  );
 
+  return result.rows[0] || null;
+}
 module.exports = {
   getDashboardSummary,
 
@@ -647,4 +665,5 @@ module.exports = {
   getUsers,
   createUser,
   updateUserStatus,
+  updateUserRole,
 };

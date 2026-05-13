@@ -379,7 +379,53 @@ async function updateUserStatus(req, res, next) {
     next(error);
   }
 }
+async function updateUserRole(req, res, next) {
+  try {
+    const { vai_tro } = req.body;
 
+    const allowedRoles = [
+      'QUAN_LY',
+      'NV_BAN_HANG',
+      'NV_KHO',
+    ];
+
+    if (!allowedRoles.includes(vai_tro)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Quyền người dùng không hợp lệ',
+      });
+    }
+
+    const data = await managerService.updateUserRole(
+      req.params.id,
+      vai_tro
+    );
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Cập nhật quyền người dùng thành công',
+      data,
+    });
+  } catch (error) {
+    // Nếu DB enum chưa có role NV_KHO thì báo rõ hơn
+    if (error.code === '22P02') {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Database chưa hỗ trợ quyền này. Cần thêm role vào enum vai_tro.',
+      });
+    }
+
+    next(error);
+  }
+}
 module.exports = {
   getDashboard,
 
@@ -405,4 +451,5 @@ module.exports = {
   getUsers,
   createUser,
   updateUserStatus,
+  updateUserRole,
 };
